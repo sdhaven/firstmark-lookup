@@ -356,6 +356,19 @@ for (const ca of Object.keys(APPT[st]))
 APPT[st][ca] = [...APPT[st][ca]].sort();
 }
 
+// Split a comma list and drop duplicates (ignores case and stray/non-breaking spaces)
+function splitUnique(str) {
+const seen = new Set();
+return (str || '').split(',')
+.map(s => s.replace(/\s+/g, ' ').trim())
+.filter(s => {
+const key = s.toLowerCase();
+if (!s || seen.has(key)) return false;
+seen.add(key);
+return true;
+});
+}
+
 function buildProds(rows) {
 PRODS = rows.map(r => ({
 name: (r['Name'] || '').trim(),
@@ -365,7 +378,7 @@ phone: (r['Phone'] || '').trim(),
 resident_state: (r['Resident State'] || '').trim(),
 licensed_states: (r['Licensed States'] || '').split(',').map(s=>s.trim()).filter(Boolean),
 state_count: parseInt(r['State Count'] || '0') || 0,
-all_loas: (r['Lines of Authority'] || '').split(',').map(s=>s.trim()).filter(Boolean),
+all_loas: splitUnique(r['Lines of Authority']),
 total_active_appointments: parseInt(r['Active Appointments'] || '0') || 0,
 })).filter(p => p.name);
 }
@@ -383,7 +396,7 @@ cls: (r['License Class'] || '').trim(),
 active: (r['Active'] || '').trim(),
 issue_date: (r['Issue Date'] || '').trim(),
 exp_date: (r['Expiration Date'] || '').trim(),
-loas: (r['Lines of Authority'] || '').split(',').map(s=>s.trim()).filter(Boolean),
+loas: splitUnique(r['Lines of Authority']),
 active_appts: parseInt(r['Active Appointments'] || '0') || 0,
 residency: (r['Residency'] || '').trim(),
 };
