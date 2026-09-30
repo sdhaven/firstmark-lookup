@@ -250,9 +250,9 @@ Refresh
 
 <script>
 const URLS = {
-appointments: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTF2wIgdG3DFcT4irgodJ6Szj7x0Z3SjFgrbCkqxsF4sBsNm1daZwiFNXNd2UX5m4x2dP9EuALZdn27/pub?output=csv&gid=580293209",
-producers: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTF2wIgdG3DFcT4irgodJ6Szj7x0Z3SjFgrbCkqxsF4sBsNm1daZwiFNXNd2UX5m4x2dP9EuALZdn27/pub?output=csv&gid=374813985",
-licenses: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTF2wIgdG3DFcT4irgodJ6Szj7x0Z3SjFgrbCkqxsF4sBsNm1daZwiFNXNd2UX5m4x2dP9EuALZdn27/pub?output=csv&gid=656719742"
+appointments: "https://stfmniprwus2prod.blob.core.windows.net/lookup-data/appointments.csv",
+producers: "https://stfmniprwus2prod.blob.core.windows.net/lookup-data/producers.csv",
+licenses: "https://stfmniprwus2prod.blob.core.windows.net/lookup-data/licenses.csv"
 };
 
 let APPT = {}, PRODS = [], LICENSES = {};
@@ -287,7 +287,7 @@ return out;
 // ── Fetch ─────────────────────────────────────────────────────────────────────
 async function fetchCSV(url) {
 // Cache-bust so refresh always gets fresh data
-const res = await fetch(url + '&_=' + Date.now());
+const res = await fetch(url + '?_=' + Date.now());
 if (!res.ok) throw new Error('HTTP ' + res.status);
 return res.text();
 }
