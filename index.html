@@ -536,12 +536,21 @@ if (u.includes('health') || u.includes('accident') || u.includes('sickness') || 
 return 'pc';
 }
 
-// If a license has no expiration date on file, we can't confirm it's still
-// active even if the sheet says "Yes" — show "Unsure" instead.
-function activeStatus(lic) {
+// States that issue perpetual producer licenses — no expiration date is ever
+// reported, so a blank date there is normal and the sheet's Active value stands.
+const PERPETUAL_STATES = new Set(['FL', 'ME', 'MI', 'NC']);
+
+// If a license has no expiration date on file (outside perpetual states), we
+// can't confirm it's still active even if the sheet says "Yes" — show "Unsure".
+function activeStatus(lic, st) {
 if (!lic || !lic.active) return { text: '—', cls: '' };
-if (!lic.exp_date) return { text: 'Unsure', cls: 'active-unsure' };
+if (!lic.exp_date && !PERPETUAL_STATES.has(st)) return { text: 'Unsure', cls: 'active-unsure' };
 return { text: lic.active, cls: lic.active === 'Yes' ? 'active-yes' : 'active-no' };
+}
+
+function expText(lic, st) {
+if (lic && lic.exp_date) return lic.exp_date;
+return PERPETUAL_STATES.has(st) ? '<span style="color:#888;font-style:italic">No expiry</span>' : '—';
 }
 
 function lobIcon(cls) {
@@ -715,13 +724,13 @@ const pLic = LICENSES[p.npn] || {};
 const stateRows = p.licensed_states.map(st => {
 const lic = pLic[st] || {};
 const isRes = st === p.resident_state;
-const as = activeStatus(lic);
+const as = activeStatus(lic, st);
 const rowCls = as.text === 'Yes' ? 'row-active-yes' : as.text === 'No' ? 'row-active-no' : '';
 return `<tr class="${rowCls}">
 <td><strong>${st}</strong> <span class="res-badge ${isRes?'res-r':'res-nr'}">${isRes?'Resident':'Non-Res'}</span></td>
 <td>${lic.license_num||'—'}</td>
 <td class="${as.cls}">${as.text}</td>
-<td>${lic.exp_date||'—'}</td>
+<td>${expText(lic, st)}</td>
 <td>${lic.active_appts||0}</td>
 <td style="color:#555">${(lic.loas||[]).join(', ')||'—'}</td>
 </tr>`;
@@ -823,8 +832,8 @@ rlist.innerHTML = matches.map(p => {
 const lic = (LICENSES[p.npn] || {})[state] || {};
 const isRes = state === p.resident_state;
 const loas = (lic.loas || []).join(', ') || '—';
-const exp = lic.exp_date || '—';
-const as = activeStatus(lic);
+const exp = expText(lic, state);
+const as = activeStatus(lic, state);
 const rowBg = as.text === 'Yes' ? '#eaf5ea' : as.text === 'No' ? '#fbeaea' : '#fff';
 return `<div style="padding:12px 16px;border-bottom:1px solid #f0f0ec;background:${rowBg};">
 <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:6px;">
@@ -850,13 +859,13 @@ rlist.innerHTML = p.licensed_states.map(st => {
 const lic = pLic[st] || {};
 const isRes = st === p.resident_state;
 const loas = (lic.loas || []).join(', ') || '—';
-const as = activeStatus(lic);
+const as = activeStatus(lic, st);
 const rowBg = as.text === 'Yes' ? '#eaf5ea' : as.text === 'No' ? '#fbeaea' : '#fff';
 return `<div style="padding:10px 16px;border-bottom:1px solid #f0f0ec;background:${rowBg};display:grid;grid-template-columns:60px 100px 90px 90px 1fr;gap:8px;align-items:center;font-size:12px;">
 <div><strong>${st}</strong> <span class="res-badge ${isRes?'res-r':'res-nr'}" style="display:block;margin-top:3px">${isRes?'Res':'Non-Res'}</span></div>
 <div><span style="color:#999;font-size:10px;display:block">License #</span>${lic.license_num||'—'}</div>
 <div><span style="color:#999;font-size:10px;display:block">Active</span><span class="${as.cls}">${as.text}</span></div>
-<div><span style="color:#999;font-size:10px;display:block">Expires</span>${lic.exp_date||'—'}</div>
+<div><span style="color:#999;font-size:10px;display:block">Expires</span>${expText(lic, st)}</div>
 <div><span style="color:#999;font-size:10px;display:block">LOAs</span>${loas}</div>
 </div>`;
 }).join('') || '<div class="empty">No licensed states found</div>';
