@@ -380,7 +380,8 @@ licensed_states: (r['Licensed States'] || '').split(',').map(s=>s.trim()).filter
 state_count: parseInt(r['State Count'] || '0') || 0,
 all_loas: splitUnique(r['Lines of Authority']),
 total_active_appointments: parseInt(r['Active Appointments'] || '0') || 0,
-})).filter(p => p.name);
+})).filter(p => p.name)
+.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 }
 
 function buildLic(rows) {
