@@ -262,6 +262,32 @@ let APPT_STATES = new Set();
 // same (e.g. several Travelers companies -> "Travelers") appear once. The raw
 // NIPR company names behind each display name are kept here for searching.
 let APPT_RAW = {};
+
+// Preferred first names, by NPN. The page shows the preferred first name
+// with the legal last name, and searching works with either name.
+// To add or change one: add a line  "NPN": "Preferred first name",
+const PREFERRED_NAMES = {
+  "18118161": "Drew",    // Andrew Pace
+  "5763201":  "Rob",     // Robert Balderas
+  "19167508": "David",   // Samuel McKinstry
+  "7690097":  "Mike",    // Michael Donnelly
+  "20109550": "Robyn",   // Sara Pace
+  "20145052": "Jen",     // Jennifer Gonzalez
+  "5770700":  "Ken",     // Kenneth Kerney
+  "18871850": "Mikey",   // Michael Porter
+  "7145458":  "Phil",    // Philip Hicks
+};
+
+function applyPreferredName(p) {
+  p.legal_name = p.name;
+  const pref = PREFERRED_NAMES[p.npn];
+  if (pref) {
+    const parts = p.name.split(/\s+/);
+    parts[0] = pref;
+    p.name = parts.join(' ');
+  }
+  return p;
+}
 let selState = null, selCarrier = null, carrierQ = '';
 let selProd = null, prodQ = '';
 
@@ -392,7 +418,7 @@ licensed_states: (r['Licensed States'] || '').split(',').map(s=>s.trim()).filter
 state_count: parseInt(r['State Count'] || '0') || 0,
 all_loas: splitUnique(r['Lines of Authority']),
 total_active_appointments: parseInt(r['Active Appointments'] || '0') || 0,
-})).filter(p => p.name)
+})).filter(p => p.name).map(applyPreferredName)
 .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 }
 
@@ -707,6 +733,7 @@ if (!prodQ) return PRODS;
 const q = prodQ.toUpperCase();
 return PRODS.filter(p =>
 p.name.toUpperCase().includes(q) ||
+p.legal_name.toUpperCase().includes(q) ||
 p.npn.includes(q) ||
 p.resident_state.toUpperCase() === q ||
 p.licensed_states.some(s => s.toUpperCase() === q)
@@ -770,7 +797,7 @@ return `<tr class="${rowCls}">
 const nonRes = p.licensed_states.filter(s=>s!==p.resident_state).length;
 wrap.innerHTML = `<div class="prod-detail">
 <div class="prod-detail-head">
-<h2>${tc(p.name)}</h2>
+<h2>${tc(p.name)}</h2>${p.legal_name !== p.name ? `<div class="npnline">Legal name: ${tc(p.legal_name)}</div>` : ''}
 <div class="npnline">NPN: ${p.npn} &nbsp;&middot;&nbsp; Resident: ${p.resident_state}</div>
 </div>
 <div class="info-grid">
@@ -818,7 +845,7 @@ if (slMode === 'state') {
 const all = slAllStates();
 return q ? all.filter(s => s.includes(q)) : all;
 } else {
-return q ? PRODS.filter(p => p.name.toUpperCase().includes(q) || p.npn.includes(q)) : PRODS;
+return q ? PRODS.filter(p => p.name.toUpperCase().includes(q) || p.legal_name.toUpperCase().includes(q) || p.npn.includes(q)) : PRODS;
 }
 }
 
