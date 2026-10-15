@@ -143,11 +143,11 @@ header, .search-wrap, .appt-layout, .prod-layout, #appt-sr { padding-left: 14px;
 <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
 </svg>
 <p>Loading FirstMark data&hellip;</p>
-<span id="load-status">Connecting to Google Sheets</span>
+<span id="load-status">Loading…</span>
 </div>
 
 <div id="error-banner" style="display:none">
-<span>&#9888;&#65039; Could not load data. Check your internet connection or the sheet may not be published.</span>
+<span>&#9888;&#65039; Could not load data. Check your internet connection and try again.</span>
 <button onclick="loadAllData(true)">Retry</button>
 </div>
 
@@ -158,7 +158,6 @@ header, .search-wrap, .appt-layout, .prod-layout, #appt-sr { padding-left: 14px;
 <div class="last-updated" id="last-updated"></div>
 </div>
 <div class="hright">
-<span class="hbadge">Live from Google Sheets</span>
 <button class="refresh-btn" onclick="loadAllData(true)">
 <svg id="refresh-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
 <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
@@ -259,6 +258,10 @@ let APPT = {}, PRODS = [], LICENSES = {};
 // States that report ANY appointment to NIPR (any status). Some states don't
 // report appointments at all, so a 0 there means "unknown", not "none".
 let APPT_STATES = new Set();
+// Carriers are grouped by their DISPLAY name, so entities that display the
+// same (e.g. several Travelers companies -> "Travelers") appear once. The raw
+// NIPR company names behind each display name are kept here for searching.
+let APPT_RAW = {};
 let selState = null, selCarrier = null, carrierQ = '';
 let selProd = null, prodQ = '';
 
@@ -345,6 +348,7 @@ if (el) el.textContent = msg;
 function buildAppt(rows) {
 APPT = {};
 APPT_STATES = new Set();
+APPT_RAW = {};
 rows.forEach(r => {
 const state = (r['State'] || '').trim();
 if (state) APPT_STATES.add(state);
@@ -352,9 +356,12 @@ const carrier = (r['Company Name'] || '').trim();
 const lob = (r['Line of Authority'] || '').trim();
 const status = (r['Appointment Status'] || '').trim();
 if (!state || !carrier || status !== 'Appointed') return;
+const name = dispName(carrier);
+if (!APPT_RAW[name]) APPT_RAW[name] = new Set();
+APPT_RAW[name].add(carrier.toUpperCase());
 if (!APPT[state]) APPT[state] = {};
-if (!APPT[state][carrier]) APPT[state][carrier] = new Set();
-APPT[state][carrier].add(lob || 'Not Specified');
+if (!APPT[state][name]) APPT[state][name] = new Set();
+APPT[state][name].add(lob || 'Not Specified');
 });
 for (const st of Object.keys(APPT))
 for (const ca of Object.keys(APPT[st]))
@@ -425,7 +432,7 @@ if (st) p.resident_state = st;
 function tc(s) { return s.toLowerCase().replace(/\b(\w)/g, c => c.toUpperCase()); }
 
 // ── Carrier display-name rules (brand grouping) ────────────────────────────
-// Groups legal "Company Name" strings from the Google Sheet into their
+// Groups legal "Company Name" strings from the NIPR data into their
 // popular parent-brand name for display. Matching is by KEYWORD (substring),
 // not exact string — so new legal-entity variants NIPR adds later (e.g. a
 // new "TRAVELERS XYZ INSURANCE CO") are automatically caught without needing
@@ -538,6 +545,12 @@ const CARRIER_RULES = [
 // Returns the display name for a carrier: matches the first CARRIER_RULES
 // keyword found in the legal name, otherwise falls back to the legal name
 // in Title Case (the original default behavior).
+// q is already upper-case. Matches the display name or any NIPR company
+// name grouped under it.
+function carrierMatches(name, q) {
+  return name.toUpperCase().includes(q) || [...(APPT_RAW[name] || [])].some(r => r.includes(q));
+}
+
 function dispName(raw) {
   const upper = (raw || '').trim().toUpperCase();
   for (const [pat, disp] of CARRIER_RULES) {
@@ -616,12 +629,12 @@ const cc = document.getElementById('car-ct');
 if (!selState) { cl.innerHTML = '<div class="empty">Select a state</div>'; cc.textContent=''; return; }
 const all = Object.keys(APPT[selState]).sort();
 const q = carrierQ.toUpperCase();
-const filtered = q ? all.filter(c => c.includes(q) || dispName(c).toUpperCase().includes(q)) : all;
+const filtered = q ? all.filter(c => carrierMatches(c, q)) : all;
 document.getElementById('car-head').textContent = 'Carriers — ' + selState;
 cc.textContent = filtered.length < all.length ? filtered.length+' / '+all.length : all.length;
 cl.innerHTML = filtered.map((c,i) =>
 `<div class="item${c===selCarrier?' active':''}" data-cidx="${i}">
-<span style="flex:1;min-width:0">${dispName(c)}</span><span class="arr">›</span>
+<span style="flex:1;min-width:0">${c}</span><span class="arr">›</span>
 </div>`
 ).join('') || '<div class="empty">No matches</div>';
 cl._filtered = filtered;
@@ -644,7 +657,7 @@ if (!selCarrier || !selState) { lp.innerHTML = '<div class="empty">Select a carr
 const lobs = APPT[selState][selCarrier] || [];
 const notSpec = lobs.length===1 && lobs[0]==='Not Specified';
 lp.innerHTML = `<div class="lob-inner">
-<div class="lob-ctx">${selState} · ${dispName(selCarrier)}</div>
+<div class="lob-ctx">${selState} · ${selCarrier}</div>
 ${notSpec
 ? `<span class="lob-badge lob-none">${lobIcon('none')} LOB not reported by NIPR for this state</span>
 <div class="lob-note">Some states don't report line-of-authority detail in NIPR appointments. The appointment is active — LOB data is unavailable in this report.</div>`
@@ -664,7 +677,7 @@ const q = v.toUpperCase();
 const hits = {};
 for (const [state, carriers] of Object.entries(APPT))
 for (const [carrier, lobs] of Object.entries(carriers))
-if (carrier.includes(q) || dispName(carrier).toUpperCase().includes(q)) { if (!hits[carrier]) hits[carrier]=[]; hits[carrier].push({state,lobs}); }
+if (carrierMatches(carrier, q)) { if (!hits[carrier]) hits[carrier]=[]; hits[carrier].push({state,lobs}); }
 const entries = Object.entries(hits).sort(([a],[b])=>a.localeCompare(b));
 document.getElementById('appt-sr-head').textContent = `Results for "${v}"`;
 document.getElementById('appt-sr-ct').textContent = entries.length + ' carrier' + (entries.length!==1?'s':'');
@@ -675,7 +688,7 @@ const rh = rows.map(r => {
 const lobs = r.lobs.filter(l=>l!=='Not Specified');
 return `<div class="sr-row"><span class="sr-state">${r.state}</span><span class="sr-lobs">${lobs.length?lobs.join(' · '):'<span class="sr-none">LOB not specified</span>'}</span></div>`;
 }).join('');
-return `<div class="sr-item"><div class="sr-carrier">${dispName(carrier)}</div>${rh}</div>`;
+return `<div class="sr-item"><div class="sr-carrier">${carrier}</div>${rh}</div>`;
 }).join('');
 });
 
