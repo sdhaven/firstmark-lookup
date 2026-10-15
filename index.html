@@ -256,6 +256,9 @@ licenses: "https://stfmniprwus2prod.blob.core.windows.net/lookup-data/licenses.c
 };
 
 let APPT = {}, PRODS = [], LICENSES = {};
+// States that report ANY appointment to NIPR (any status). Some states don't
+// report appointments at all, so a 0 there means "unknown", not "none".
+let APPT_STATES = new Set();
 let selState = null, selCarrier = null, carrierQ = '';
 let selProd = null, prodQ = '';
 
@@ -341,8 +344,10 @@ if (el) el.textContent = msg;
 // ── Data builders ─────────────────────────────────────────────────────────────
 function buildAppt(rows) {
 APPT = {};
+APPT_STATES = new Set();
 rows.forEach(r => {
 const state = (r['State'] || '').trim();
+if (state) APPT_STATES.add(state);
 const carrier = (r['Company Name'] || '').trim();
 const lob = (r['Line of Authority'] || '').trim();
 const status = (r['Appointment Status'] || '').trim();
@@ -745,7 +750,7 @@ return `<tr class="${rowCls}">
 <td>${lic.license_num||'—'}</td>
 <td class="${as.cls}">${as.text}</td>
 <td>${expText(lic, st)}</td>
-<td>${lic.active_appts||0}</td>
+<td>${(lic.active_appts||0) > 0 || APPT_STATES.has(st) ? (lic.active_appts||0) : '<span style="color:#888" title="This state doesn\'t report appointments to NIPR, so we can\'t tell from this data.">Not sure</span>'}</td>
 <td style="color:#555">${(lic.loas||[]).join(', ')||'—'}</td>
 </tr>`;
 }).join('');
