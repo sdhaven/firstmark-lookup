@@ -258,6 +258,11 @@ let APPT = {}, PRODS = [], LICENSES = {};
 // States that report ANY appointment to NIPR (any status). Some states don't
 // report appointments at all, so a 0 there means "unknown", not "none".
 let APPT_STATES = new Set();
+// States that don't require (or don't report) individual producer
+// appointments (per AgentSync's state-by-state appointment guide, Oct 2026).
+// A 0 in these states means "unknown", even if some carriers report there.
+// CO and MD require appointments only for narrow cases (bail bonds, motor club).
+const NON_APPOINTING_STATES = new Set(['AK','AZ','CO','IL','IN','MD','MO','OR','RI']);
 // Carriers are grouped by their DISPLAY name, so entities that display the
 // same (e.g. several Travelers companies -> "Travelers") appear once. The raw
 // NIPR company names behind each display name are kept here for searching.
@@ -790,7 +795,7 @@ return `<tr class="${rowCls}">
 <td>${lic.license_num||'—'}</td>
 <td class="${as.cls}">${as.text}</td>
 <td>${expText(lic, st)}</td>
-<td>${(lic.active_appts||0) > 0 || APPT_STATES.has(st) ? (lic.active_appts||0) : '<span style="color:#888" title="This state doesn\'t report appointments to NIPR, so we can\'t tell from this data.">Not sure</span>'}</td>
+<td>${(lic.active_appts||0) > 0 || (APPT_STATES.has(st) && !NON_APPOINTING_STATES.has(st)) ? (lic.active_appts||0) : '<span style="color:#888" title="This state doesn\'t report appointments to NIPR, so we can\'t tell from this data.">Not sure</span>'}</td>
 <td style="color:#555">${(lic.loas||[]).join(', ')||'—'}</td>
 </tr>`;
 }).join('');
