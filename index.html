@@ -65,6 +65,8 @@ header h1 { font-size: 17px; font-weight: 600; }
 .exp-card-head .exp-name { font-size: 14px; font-weight: 600; color: #1a1a18; }
 .exp-card-head .exp-meta { font-size: 12px; color: #777; white-space: nowrap; }
 .exp-card .state-table td { background: #fff; }
+.exp-section { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #666; margin: 4px 2px -4px; }
+.soon-days { color: #9a5b00; font-weight: 600; white-space: nowrap; }
 @media (max-width: 700px) { .exp-wrap { padding: 12px 14px 24px; } .exp-hide-sm { display: none; } }
 .page { display: none; }
 .page.active { display: block; }
@@ -182,7 +184,7 @@ Refresh
 <div class="tab active" data-tab="appointments">Company Appointments</div>
 <div class="tab" data-tab="producers">Licensed Producers</div>
 <div class="tab" data-tab="statelookup">State ↔ Producer</div>
-<div class="tab" data-tab="expired">Expired Licenses</div>
+<div class="tab" data-tab="expired">Expired &amp; Expiring</div>
 </div>
 
 <!-- TAB 1: APPOINTMENTS -->
@@ -265,7 +267,7 @@ Refresh
 </div>
 <span class="exp-summary" id="exp-summary"></span>
 </div>
-<div class="exp-wrap" id="exp-list"></div>
+<div class="exp-wrap"><div id="soon-list"></div><div id="exp-list" style="display:flex;flex-direction:column;gap:14px"></div></div>
 </div>
 
 <script>
@@ -665,11 +667,55 @@ const m = (d || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
 return m ? m[3] + m[1] + m[2] : '';
 }
 
+const SOON_DAYS = 60;
+
+function parseUSDate(d) {
+const m = (d || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+return m ? new Date(+m[3], +m[1] - 1, +m[2]) : null;
+}
+
+function renderExpiringSoon(q, byNpn) {
+const wrap = document.getElementById('soon-list');
+const today = new Date(); today.setHours(0, 0, 0, 0);
+const rows = [];
+for (const [npn, states] of Object.entries(LICENSES)) {
+const p = byNpn[npn];
+const name = p ? p.name : 'NPN ' + npn;
+const legal = p ? p.legal_name : '';
+for (const [st, lic] of Object.entries(states)) {
+if (lic.active !== 'Yes') continue;
+const d = parseUSDate(lic.exp_date);
+if (!d) continue;
+const days = Math.round((d - today) / 86400000);
+if (days < 0 || days > SOON_DAYS) continue;
+if (q && !(name.toUpperCase().includes(q) || legal.toUpperCase().includes(q) || npn.includes(q) || st.toUpperCase() === q)) continue;
+rows.push({ name, npn, st, lic, days });
+}
+}
+rows.sort((a, b) => a.days - b.days || a.name.localeCompare(b.name));
+const body = rows.length
+? `<div style="overflow-x:auto"><table class="state-table">
+<thead><tr><th>Producer</th><th>State</th><th>License #</th><th>Expires</th><th>In</th></tr></thead>
+<tbody>${rows.map(r => `<tr>
+<td><strong>${tc(r.name)}</strong></td>
+<td>${r.st}</td>
+<td>${r.lic.license_num || '—'}</td>
+<td>${r.lic.exp_date}</td>
+<td class="soon-days">${r.days === 0 ? 'Today' : r.days + ' day' + (r.days !== 1 ? 's' : '')}</td>
+</tr>`).join('')}</tbody></table></div>`
+: `<div class="empty">${q ? 'No matches' : 'Nothing expiring in the next ' + SOON_DAYS + ' days'}</div>`;
+wrap.innerHTML = `<div class="exp-section" style="margin-bottom:10px">Expiring in the next ${SOON_DAYS} days (${rows.length})</div>
+<div class="exp-card">${body}</div>
+<div class="exp-section" style="margin:22px 2px 10px">Expired</div>`;
+return rows.length;
+}
+
 function renderExpired() {
 const list = document.getElementById('exp-list');
 const q = (document.getElementById('exp-search').value || '').trim().toUpperCase();
 const byNpn = {};
 PRODS.forEach(p => { byNpn[p.npn] = p; });
+const soonCount = renderExpiringSoon(q, byNpn);
 const groups = {};
 EXPIRED.forEach(r => {
 const p = byNpn[r.npn];
@@ -682,7 +728,7 @@ groups[r.npn].rows.push(r);
 const gs = Object.values(groups).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 const total = gs.reduce((n, g) => n + g.rows.length, 0);
 document.getElementById('exp-summary').textContent =
-total + ' expired license' + (total !== 1 ? 's' : '') + ' · ' + gs.length + ' producer' + (gs.length !== 1 ? 's' : '');
+soonCount + ' expiring soon · ' + total + ' expired license' + (total !== 1 ? 's' : '') + ' · ' + gs.length + ' producer' + (gs.length !== 1 ? 's' : '');
 if (!gs.length) { list.innerHTML = '<div class="empty" style="background:#fff;border:1px solid #e4e4e0;border-radius:10px">' + (q ? 'No matches' : 'No expired licenses') + '</div>'; return; }
 list.innerHTML = gs.map(g => {
 g.rows.sort((a, b) => dateKey(b.exp_date).localeCompare(dateKey(a.exp_date)) || a.state.localeCompare(b.state));
