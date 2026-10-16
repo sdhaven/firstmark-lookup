@@ -58,6 +58,14 @@ header h1 { font-size: 17px; font-weight: 600; }
 .item.active .arr { color: #2e5f9e; }
 .empty { padding: 26px 16px; font-size: 13px; color: #bbb; text-align: center; line-height: 1.6; }
 
+.exp-wrap { padding: 16px 28px 32px; display: flex; flex-direction: column; gap: 14px; max-width: 1100px; }
+.exp-summary { font-size: 12px; color: #777; white-space: nowrap; }
+.exp-card { background: #fff; border: 1px solid #e4e4e0; border-radius: 10px; overflow: hidden; }
+.exp-card-head { padding: 10px 16px; background: #f7f7f5; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.exp-card-head .exp-name { font-size: 14px; font-weight: 600; color: #1a1a18; }
+.exp-card-head .exp-meta { font-size: 12px; color: #777; white-space: nowrap; }
+.exp-card .state-table td { background: #fff; }
+@media (max-width: 700px) { .exp-wrap { padding: 12px 14px 24px; } .exp-hide-sm { display: none; } }
 .page { display: none; }
 .page.active { display: block; }
 
@@ -174,6 +182,7 @@ Refresh
 <div class="tab active" data-tab="appointments">Company Appointments</div>
 <div class="tab" data-tab="producers">Licensed Producers</div>
 <div class="tab" data-tab="statelookup">State ↔ Producer</div>
+<div class="tab" data-tab="expired">Expired Licenses</div>
 </div>
 
 <!-- TAB 1: APPOINTMENTS -->
@@ -247,6 +256,18 @@ Refresh
 </div>
 </div>
 
+<!-- TAB 4: EXPIRED LICENSES -->
+<div id="tab-expired" class="page">
+<div class="search-wrap">
+<div class="search-box">
+<svg class="sicon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+<input type="text" id="exp-search" placeholder="Filter by name, NPN, or state&hellip;" autocomplete="off"/>
+</div>
+<span class="exp-summary" id="exp-summary"></span>
+</div>
+<div class="exp-wrap" id="exp-list"></div>
+</div>
+
 <script>
 const URLS = {
 appointments: "https://stfmniprwus2prod.blob.core.windows.net/lookup-data/appointments.csv",
@@ -254,7 +275,7 @@ producers: "https://stfmniprwus2prod.blob.core.windows.net/lookup-data/producers
 licenses: "https://stfmniprwus2prod.blob.core.windows.net/lookup-data/licenses.csv"
 };
 
-let APPT = {}, PRODS = [], LICENSES = {};
+let APPT = {}, PRODS = [], LICENSES = {}, EXPIRED = [];
 // States that report ANY appointment to NIPR (any status). Some states don't
 // report appointments at all, so a 0 there means "unknown", not "none".
 let APPT_STATES = new Set();
@@ -360,6 +381,7 @@ document.getElementById('prod-clr').style.display = 'none';
 renderStates(); renderCarriers(); renderLOB();
 renderProdList(); renderProdDetail();
 renderSLLeft(); renderSLRight();
+renderExpired();
 
 } catch(err) {
 console.error(err);
@@ -429,10 +451,18 @@ total_active_appointments: parseInt(r['Active Appointments'] || '0') || 0,
 
 function buildLic(rows) {
 LICENSES = {};
+const inactiveRows = [];
 rows.forEach(r => {
 const npn = (r['NPN'] || '').trim();
 const state = (r['State'] || '').trim();
 if (!npn || !state) return;
+if ((r['Active'] || '').trim() !== 'Yes') inactiveRows.push({
+npn, state,
+license_num: (r['License Number'] || '').trim(),
+cls: (r['License Class'] || '').trim(),
+exp_date: (r['Expiration Date'] || '').trim(),
+loas: splitUnique(r['Lines of Authority']),
+});
 if (!LICENSES[npn]) LICENSES[npn] = {};
 // A producer can hold two licenses in one state (e.g. an old resident license
 // that lapsed after a move, plus a newer non-resident one). Keep the active row.
@@ -457,6 +487,10 @@ const lic = LICENSES[p.npn] || {};
 const st = Object.keys(lic).find(s => lic[s].residency === 'Resident' && lic[s].active === 'Yes');
 if (st) p.resident_state = st;
 });
+// Expired licenses: inactive rows, minus any state where the same producer
+// now holds an active license (an old license that was replaced, e.g. a
+// resident license that became non-resident after a move).
+EXPIRED = inactiveRows.filter(r => !(LICENSES[r.npn] && LICENSES[r.npn][r.state] && LICENSES[r.npn][r.state].active === 'Yes'));
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
@@ -622,6 +656,53 @@ if (cls==='health') return '<svg width="11" height="11" viewBox="0 0 24 24" fill
 if (cls==='none') return '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
 return '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
 }
+
+// ════════════════════════════════════════════════════════════
+// EXPIRED LICENSES
+// ════════════════════════════════════════════════════════════
+function dateKey(d) {
+const m = (d || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+return m ? m[3] + m[1] + m[2] : '';
+}
+
+function renderExpired() {
+const list = document.getElementById('exp-list');
+const q = (document.getElementById('exp-search').value || '').trim().toUpperCase();
+const byNpn = {};
+PRODS.forEach(p => { byNpn[p.npn] = p; });
+const groups = {};
+EXPIRED.forEach(r => {
+const p = byNpn[r.npn];
+const name = p ? p.name : 'NPN ' + r.npn;
+const legal = p ? p.legal_name : '';
+if (q && !(name.toUpperCase().includes(q) || legal.toUpperCase().includes(q) || r.npn.includes(q) || r.state.toUpperCase() === q)) return;
+if (!groups[r.npn]) groups[r.npn] = { name, npn: r.npn, rows: [] };
+groups[r.npn].rows.push(r);
+});
+const gs = Object.values(groups).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+const total = gs.reduce((n, g) => n + g.rows.length, 0);
+document.getElementById('exp-summary').textContent =
+total + ' expired license' + (total !== 1 ? 's' : '') + ' · ' + gs.length + ' producer' + (gs.length !== 1 ? 's' : '');
+if (!gs.length) { list.innerHTML = '<div class="empty" style="background:#fff;border:1px solid #e4e4e0;border-radius:10px">' + (q ? 'No matches' : 'No expired licenses') + '</div>'; return; }
+list.innerHTML = gs.map(g => {
+g.rows.sort((a, b) => dateKey(b.exp_date).localeCompare(dateKey(a.exp_date)) || a.state.localeCompare(b.state));
+const rows = g.rows.map(r => `<tr>
+<td><strong>${r.state}</strong></td>
+<td>${r.license_num || '—'}</td>
+<td class="exp-hide-sm">${r.cls ? tc(r.cls) : '—'}</td>
+<td class="active-no">${r.exp_date || '—'}</td>
+<td class="exp-hide-sm" style="color:#555">${r.loas.join(', ') || '—'}</td>
+</tr>`).join('');
+return `<div class="exp-card">
+<div class="exp-card-head"><span class="exp-name">${tc(g.name)}</span><span class="exp-meta">NPN ${g.npn} · ${g.rows.length} expired</span></div>
+<div style="overflow-x:auto"><table class="state-table">
+<thead><tr><th>State</th><th>License #</th><th class="exp-hide-sm">Type</th><th>Expired</th><th class="exp-hide-sm">Lines of Authority</th></tr></thead>
+<tbody>${rows}</tbody></table></div>
+</div>`;
+}).join('');
+}
+
+document.getElementById('exp-search').addEventListener('input', renderExpired);
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 document.querySelectorAll('.tab').forEach(t => {
