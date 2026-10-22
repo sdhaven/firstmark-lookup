@@ -306,6 +306,14 @@ const PREFERRED_NAMES = {
   "7145458":  "Phil",    // Philip Hicks
 };
 
+// Producers hidden from this page (e.g. someone who has left FirstMark).
+// They stay in the database and NIPR Alerts; this only hides them here.
+// To hide someone: add a line  "NPN",  // Name, date left
+// To bring them back: delete their line.
+const HIDDEN_NPNS = new Set([
+  "17279804",  // Rosemary Ramirez, left 2026-10-23
+]);
+
 function applyPreferredName(p) {
   p.legal_name = p.name;
   const pref = PREFERRED_NAMES[p.npn];
@@ -447,7 +455,7 @@ licensed_states: (r['Licensed States'] || '').split(',').map(s=>s.trim()).filter
 state_count: parseInt(r['State Count'] || '0') || 0,
 all_loas: splitUnique(r['Lines of Authority']),
 total_active_appointments: parseInt(r['Active Appointments'] || '0') || 0,
-})).filter(p => p.name).map(applyPreferredName)
+})).filter(p => p.name && !HIDDEN_NPNS.has(p.npn)).map(applyPreferredName)
 .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 }
 
@@ -457,7 +465,7 @@ const inactiveRows = [];
 rows.forEach(r => {
 const npn = (r['NPN'] || '').trim();
 const state = (r['State'] || '').trim();
-if (!npn || !state) return;
+if (!npn || !state || HIDDEN_NPNS.has(npn)) return;
 if ((r['Active'] || '').trim() !== 'Yes') inactiveRows.push({
 npn, state,
 license_num: (r['License Number'] || '').trim(),
