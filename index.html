@@ -316,7 +316,7 @@ const NON_APPOINTING_STATES = new Set(['AK','AZ','CO','IL','IN','MD','MO','OR','
 document.addEventListener('DOMContentLoaded', () => {
 const list = [...NON_APPOINTING_STATES].sort().join(', ');
 document.querySelectorAll('.non-appt-note').forEach(el => el.innerHTML =
-'<strong>Note:</strong> ' + list + " don't require or don't report producer appointments to NIPR, so appointments in these states won't show here. (CO and MD require them only for narrow cases such as bail bonds and motor clubs.)");
+'<strong>Please Note:</strong> ' + list + " do not report appointments to the dataset this webpage uses. These states' info are therefore incomplete.");
 });
 // Carriers are grouped by their DISPLAY name, so entities that display the
 // same (e.g. several Travelers companies -> "Travelers") appear once. The raw
