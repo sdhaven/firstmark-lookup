@@ -408,13 +408,21 @@ if (el) el.textContent = msg;
 }
 
 // ── Data builders ─────────────────────────────────────────────────────────────
+// Company Appointments shows the AGENCY's own appointments only (FirstMark's
+// NPN), not individual producers'. If the file has no NPN column (older
+// data), every row is used.
+const AGENCY_NPN = "17105329";
+
 function buildAppt(rows) {
 APPT = {};
 APPT_STATES = new Set();
 APPT_RAW = {};
+// Which states report appointments at all is judged from everyone's rows.
+rows.forEach(r => { const st = (r['State'] || '').trim(); if (st) APPT_STATES.add(st); });
+const hasNpn = rows.length && 'NPN' in rows[0];
+if (hasNpn) rows = rows.filter(r => (r['NPN'] || '').trim() === AGENCY_NPN);
 rows.forEach(r => {
 const state = (r['State'] || '').trim();
-if (state) APPT_STATES.add(state);
 const carrier = (r['Company Name'] || '').trim();
 const lob = (r['Line of Authority'] || '').trim();
 const status = (r['Appointment Status'] || '').trim();
