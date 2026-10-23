@@ -199,7 +199,7 @@ Refresh
 </div>
 <button class="clr-btn" id="appt-clr">&#10005; Clear</button>
 </div>
-<div class="appt-note non-appt-note"></div>
+<div class="appt-note non-appt-note" id="appt-note" style="display:none"></div>
 <div id="appt-sr">
 <div class="sr-panel">
 <div class="ph"><span class="plabel" id="appt-sr-head">Results</span><span class="pct" id="appt-sr-ct"></span></div>
@@ -232,7 +232,7 @@ Refresh
 </div>
 <button class="clr-btn" id="pa-clr">&#10005; Clear</button>
 </div>
-<div class="appt-note non-appt-note"></div>
+<div class="appt-note non-appt-note" id="pa-note" style="display:none"></div>
 <div class="prod-layout">
 <div class="panel">
 <div class="ph"><span class="plabel">Producers</span><span class="pct" id="pa-ct"></span></div>
@@ -313,11 +313,18 @@ let APPT_STATES = new Set();
 // A 0 in these states means "unknown", even if some carriers report there.
 // CO and MD require appointments only for narrow cases (bail bonds, motor club).
 const NON_APPOINTING_STATES = new Set(['AK','AZ','CO','IL','IN','MD','MO','OR','RI']);
-document.addEventListener('DOMContentLoaded', () => {
-const list = [...NON_APPOINTING_STATES].sort().join(', ');
-document.querySelectorAll('.non-appt-note').forEach(el => el.innerHTML =
-'<strong>Please Note:</strong> ' + list + " do not report appointments to the dataset this webpage uses. These states' info are therefore incomplete.");
-});
+// The "Please Note" banner shows only when a non-reporting state is
+// selected (FirstMark tab) or searched (producer tab).
+function setNonApptNote(id, state) {
+const el = document.getElementById(id);
+if (!el) return;
+if (state && NON_APPOINTING_STATES.has(state)) {
+el.innerHTML = '<strong>Please Note:</strong> ' + state + " does not report appointments to the dataset this webpage uses. This state's info is therefore incomplete.";
+el.style.display = 'block';
+} else {
+el.style.display = 'none';
+}
+}
 // Carriers are grouped by their DISPLAY name, so entities that display the
 // same (e.g. several Travelers companies -> "Travelers") appear once. The raw
 // NIPR company names behind each display name are kept here for searching.
@@ -873,6 +880,7 @@ return !ql || p.name.toLowerCase().includes(ql) || p.legal_name.toLowerCase().in
 }
 
 function renderPAList() {
+setNonApptNote('pa-note', paIsStateQ(paQ) ? paQ.trim().toUpperCase() : null);
 const filtered = paFiltered();
 document.getElementById('pa-ct').textContent = filtered.length + ' / ' + PRODS.length;
 document.getElementById('pa-list').innerHTML = filtered.map((p, i) => {
@@ -955,6 +963,7 @@ document.getElementById('tab-' + this.dataset.tab).classList.add('active');
 // ════════════════════════════════════════════════════════════
 function renderStates() {
 const states = Object.keys(APPT).sort();
+setNonApptNote('appt-note', selState);
 document.getElementById('st-ct').textContent = states.length;
 document.getElementById('st-list').innerHTML = states.map(s =>
 `<div class="item state-item${s===selState?' active':''}" data-state="${s}">
