@@ -969,12 +969,17 @@ document.getElementById('tab-' + this.dataset.tab).classList.add('active');
 // APPOINTMENTS
 // ════════════════════════════════════════════════════════════
 function renderStates() {
-const states = Object.keys(APPT).sort();
+// Non-reporting states are always listed (when anyone at FirstMark is
+// licensed there), even with no agency appointments, so people looking for
+// e.g. CO find it and see why it's empty.
+const licensedAnywhere = new Set(PRODS.flatMap(p => p.licensed_states));
+const extra = [...NON_APPOINTING_STATES].filter(st => !APPT[st] && licensedAnywhere.has(st));
+const states = [...Object.keys(APPT), ...extra].sort();
 setNonApptNote('appt-note', selState);
 document.getElementById('st-ct').textContent = states.length;
 document.getElementById('st-list').innerHTML = states.map(s =>
 `<div class="item state-item${s===selState?' active':''}" data-state="${s}">
-<span>${s}</span><span class="sct">${Object.keys(APPT[s]).length}</span>
+<span>${s}</span><span class="sct">${APPT[s] ? Object.keys(APPT[s]).length : '—'}</span>
 </div>`
 ).join('') || '<div class="empty">No appointment data loaded</div>';
 }
@@ -991,6 +996,13 @@ function renderCarriers() {
 const cl = document.getElementById('car-list');
 const cc = document.getElementById('car-ct');
 if (!selState) { cl.innerHTML = '<div class="empty">Select a state</div>'; cc.textContent=''; return; }
+if (!APPT[selState]) {
+document.getElementById('car-head').textContent = 'Carriers — ' + selState;
+cc.textContent = '0';
+cl.innerHTML = `<div class="empty">${selState} does not report appointments to the dataset this webpage uses, so no FirstMark appointments are listed here.</div>`;
+cl._filtered = [];
+return;
+}
 const all = Object.keys(APPT[selState]).sort();
 const q = carrierQ.toUpperCase();
 const filtered = q ? all.filter(c => carrierMatches(c, q)) : all;
@@ -1018,7 +1030,7 @@ carrierQ = this.value; selCarrier = null; renderCarriers(); renderLOB();
 function renderLOB() {
 const lp = document.getElementById('lob-panel');
 if (!selCarrier || !selState) { lp.innerHTML = '<div class="empty">Select a carrier</div>'; return; }
-const lobs = APPT[selState][selCarrier] || [];
+const lobs = (APPT[selState] || {})[selCarrier] || [];
 const notSpec = lobs.length===1 && lobs[0]==='Not Specified';
 lp.innerHTML = `<div class="lob-inner">
 <div class="lob-ctx">${selState} · ${selCarrier}</div>
