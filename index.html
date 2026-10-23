@@ -839,6 +839,9 @@ list.sort((a, b) => a.state.localeCompare(b.state) || a.carrier.localeCompare(b.
 function paRowMatches(a, q) {
 if (!q) return true;
 const Q = q.toUpperCase();
+// A two-letter state code (e.g. "CO", "WA") searches by state only --
+// otherwise "CO" would also match every carrier with "COMPANY" in its name.
+if (/^[A-Z]{2}$/.test(Q) && (APPT_STATES.has(Q) || NON_APPOINTING_STATES.has(Q))) return a.state === Q;
 return a.state.toUpperCase() === Q || carrierMatches(a.carrier, Q) ||
 [...a.raw].some(r => r.includes(Q));
 }
