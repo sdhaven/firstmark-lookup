@@ -199,7 +199,7 @@ Refresh
 </div>
 <button class="clr-btn" id="appt-clr">&#10005; Clear</button>
 </div>
-<div class="appt-note non-appt-note" id="appt-note" style="display:none"></div>
+<div class="appt-note non-appt-note" id="appt-note"></div>
 <div id="appt-sr">
 <div class="sr-panel">
 <div class="ph"><span class="plabel" id="appt-sr-head">Results</span><span class="pct" id="appt-sr-ct"></span></div>
@@ -318,6 +318,13 @@ const NON_APPOINTING_STATES = new Set(['AK','AZ','CO','IL','IN','MD','MO','OR','
 function setNonApptNote(id, state) {
 const el = document.getElementById(id);
 if (!el) return;
+// FirstMark tab: always shown, listing every non-reporting state, since a
+// state with no agency appointments (e.g. CO) has nothing to click on.
+if (id === 'appt-note') {
+el.innerHTML = '<strong>Please Note:</strong> ' + [...NON_APPOINTING_STATES].sort().join(', ') + " do not report appointments to the dataset this webpage uses. These states' info are therefore incomplete.";
+el.style.display = 'block';
+return;
+}
 if (state && NON_APPOINTING_STATES.has(state)) {
 el.innerHTML = '<strong>Please Note:</strong> ' + state + " does not report appointments to the dataset this webpage uses. This state's info is therefore incomplete.";
 el.style.display = 'block';
