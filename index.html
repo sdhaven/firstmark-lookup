@@ -182,6 +182,7 @@ Refresh
 
 <div class="tabs">
 <div class="tab active" data-tab="appointments">Company Appointments</div>
+<div class="tab" data-tab="prodappts">Producer Appointments</div>
 <div class="tab" data-tab="producers">Licensed Producers</div>
 <div class="tab" data-tab="statelookup">State ↔ Producer</div>
 <div class="tab" data-tab="expired">Expired &amp; Expiring</div>
@@ -216,6 +217,24 @@ Refresh
 <div class="ph"><span class="plabel">Lines of Business</span></div>
 <div id="lob-panel"><div class="empty">Select a carrier</div></div>
 </div>
+</div>
+</div>
+
+<!-- TAB: PRODUCER APPOINTMENTS -->
+<div id="tab-prodappts" class="page">
+<div class="search-wrap">
+<div class="search-box">
+<svg class="sicon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+<input type="text" id="pa-search" placeholder="Search by producer, NPN, carrier, or state&hellip;" autocomplete="off"/>
+</div>
+<button class="clr-btn" id="pa-clr">&#10005; Clear</button>
+</div>
+<div class="prod-layout">
+<div class="panel">
+<div class="ph"><span class="plabel">Producers</span><span class="pct" id="pa-ct"></span></div>
+<div class="list" id="pa-list"></div>
+</div>
+<div id="pa-detail-wrap"></div>
 </div>
 </div>
 
@@ -278,6 +297,10 @@ licenses: "https://stfmniprwus2prod.blob.core.windows.net/lookup-data/licenses.c
 };
 
 let APPT = {}, PRODS = [], LICENSES = {}, EXPIRED = [];
+// Producer Appointments tab: every row from the appointments file, and each
+// producer's own appointments grouped by NPN (built after producers load).
+let APPT_ROWS_ALL = [], PROD_APPTS = {}, PROD_APPTS_HAS_NPN = false;
+let paSel = null, paQ = '';
 // States that report ANY appointment to NIPR (any status). Some states don't
 // report appointments at all, so a 0 there means "unknown", not "none".
 let APPT_STATES = new Set();
@@ -378,18 +401,23 @@ buildProds(parseCSV(await fetchCSV(URLS.producers)));
 
 setStatus('Loading licenses…');
 buildLic(parseCSV(await fetchCSV(URLS.licenses)));
+buildProdAppts();
 
 document.getElementById('last-updated').textContent =
 'Last loaded: ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
 
 selState = null; selCarrier = null; carrierQ = '';
 selProd = null; prodQ = '';
+paSel = null; paQ = '';
+document.getElementById('pa-search').value = '';
+document.getElementById('pa-clr').style.display = 'none';
 document.getElementById('car-filter').value = '';
 document.getElementById('prod-search').value = '';
 document.getElementById('prod-clr').style.display = 'none';
 
 renderStates(); renderCarriers(); renderLOB();
 renderProdList(); renderProdDetail();
+renderPAList(); renderPADetail();
 renderSLLeft(); renderSLRight();
 renderExpired();
 
@@ -417,6 +445,7 @@ function buildAppt(rows) {
 APPT = {};
 APPT_STATES = new Set();
 APPT_RAW = {};
+APPT_ROWS_ALL = rows;
 // Which states report appointments at all is judged from everyone's rows.
 rows.forEach(r => { const st = (r['State'] || '').trim(); if (st) APPT_STATES.add(st); });
 const hasNpn = rows.length && 'NPN' in rows[0];
@@ -765,6 +794,129 @@ return `<div class="exp-card">
 }
 
 document.getElementById('exp-search').addEventListener('input', renderExpired);
+
+// ════════════════════════════════════════════════════════════
+// PRODUCER APPOINTMENTS
+// ════════════════════════════════════════════════════════════
+function escH(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function buildProdAppts() {
+PROD_APPTS = {};
+PROD_APPTS_HAS_NPN = APPT_ROWS_ALL.length > 0 && 'NPN' in APPT_ROWS_ALL[0];
+if (!PROD_APPTS_HAS_NPN) return;
+const known = new Set(PRODS.map(p => p.npn)); // active, not hidden
+const seen = {};
+APPT_ROWS_ALL.forEach(r => {
+const npn = (r['NPN'] || '').trim();
+const state = (r['State'] || '').trim();
+const raw = (r['Company Name'] || '').trim();
+if (!known.has(npn) || !state || !raw) return;
+if ((r['Appointment Status'] || '').trim() !== 'Appointed') return;
+const carrier = dispName(raw);
+const lob = (r['Line of Authority'] || '').trim() || 'Not Specified';
+const key = npn + '|' + state + '|' + carrier;
+if (!seen[key]) {
+seen[key] = { state, carrier, raw: new Set(), lobs: new Set() };
+(PROD_APPTS[npn] = PROD_APPTS[npn] || []).push(seen[key]);
+}
+seen[key].raw.add(raw.toUpperCase());
+seen[key].lobs.add(lob);
+});
+Object.values(PROD_APPTS).forEach(list =>
+list.sort((a, b) => a.state.localeCompare(b.state) || a.carrier.localeCompare(b.carrier)));
+}
+
+// Does an appointment row match the search text (carrier or state)?
+function paRowMatches(a, q) {
+if (!q) return true;
+const Q = q.toUpperCase();
+return a.state.toUpperCase() === Q || carrierMatches(a.carrier, Q) ||
+[...a.raw].some(r => r.includes(Q));
+}
+
+function paFiltered() {
+const q = paQ.trim();
+if (!q) return PRODS;
+const ql = q.toLowerCase();
+return PRODS.filter(p =>
+p.name.toLowerCase().includes(ql) || p.legal_name.toLowerCase().includes(ql) ||
+p.npn.includes(q) ||
+(PROD_APPTS[p.npn] || []).some(a => paRowMatches(a, q)));
+}
+
+// True when the search text names the producer, so we show all their rows.
+function paNameHit(p, q) {
+const ql = q.trim().toLowerCase();
+return !ql || p.name.toLowerCase().includes(ql) || p.legal_name.toLowerCase().includes(ql) || p.npn.includes(q.trim());
+}
+
+function renderPAList() {
+const filtered = paFiltered();
+document.getElementById('pa-ct').textContent = filtered.length + ' / ' + PRODS.length;
+document.getElementById('pa-list').innerHTML = filtered.map((p, i) => {
+const all = PROD_APPTS[p.npn] || [];
+const shown = paNameHit(p, paQ) ? all : all.filter(a => paRowMatches(a, paQ.trim()));
+const meta = !PROD_APPTS_HAS_NPN ? 'NPN ' + p.npn
+: (paNameHit(p, paQ) ? all.length : shown.length + ' of ' + all.length) + ' appointment' + (all.length === 1 ? '' : 's');
+return `<div class="item prod-list-item${p===paSel?' active':''}" data-pidx="${i}">
+<div class="pname">${escH(tc(p.name))}</div>
+<div class="pmeta">${meta}</div>
+</div>`;
+}).join('') || '<div class="empty">No matches</div>';
+document.getElementById('pa-list')._filtered = filtered;
+}
+
+function renderPADetail() {
+const wrap = document.getElementById('pa-detail-wrap');
+const box = html => `<div class="empty" style="padding:40px 16px;background:#fff;border:1px solid #e4e4e0;border-radius:10px;">${html}</div>`;
+if (!PROD_APPTS_HAS_NPN) { wrap.innerHTML = box('Individual producer appointments will show here after the next daily data refresh.'); return; }
+if (!paSel) { wrap.innerHTML = box('Select a producer'); return; }
+const all = PROD_APPTS[paSel.npn] || [];
+const rows = paNameHit(paSel, paQ) ? all : all.filter(a => paRowMatches(a, paQ.trim()));
+const states = new Set(all.map(a => a.state));
+const carriers = new Set(all.map(a => a.carrier));
+// Licensed states where a 0 may just mean the state doesn't report appointments.
+const unknown = paSel.licensed_states.filter(s => !states.has(s) && (NON_APPOINTING_STATES.has(s) || !APPT_STATES.has(s))).sort();
+const filterNote = rows.length !== all.length
+? `<div class="lob-note" style="padding:8px 16px;margin:0;border-bottom:1px solid #eee">Showing ${rows.length} of ${all.length} matching &ldquo;${escH(paQ.trim())}&rdquo;</div>` : '';
+const table = rows.length ? `<table class="state-table">
+<tr><th>State</th><th>Carrier</th><th>Lines of Authority</th></tr>
+${rows.map(a => `<tr><td style="font-weight:600;color:#1f3864">${a.state}</td><td>${escH(a.carrier)}</td><td>${[...a.lobs].sort().map(l => {
+const c = lobClass(l);
+return `<span class="lob-badge lob-${c}" style="margin:0 4px 4px 0">${lobIcon(c)}${escH(l)}</span>`;
+}).join('')}</td></tr>`).join('')}
+</table>` : `<div class="empty">No appointments on record with NIPR${rows.length !== all.length ? ' matching this search' : ''}</div>`;
+wrap.innerHTML = `<div class="prod-detail">
+<div class="prod-detail-head"><h2>${escH(tc(paSel.name))}</h2><div class="npnline">NPN ${paSel.npn}${paSel.legal_name !== paSel.name ? ' · Legal name ' + escH(tc(paSel.legal_name)) : ''}</div></div>
+<div class="stat-row" style="grid-template-columns:repeat(3,1fr)">
+<div class="stat-cell"><div class="stat-num">${all.length}</div><div class="stat-lbl">Appointments</div></div>
+<div class="stat-cell"><div class="stat-num">${carriers.size}</div><div class="stat-lbl">Carriers</div></div>
+<div class="stat-cell"><div class="stat-num">${states.size}</div><div class="stat-lbl">States</div></div>
+</div>
+${filterNote}${table}
+${unknown.length ? `<div class="lob-note" style="padding:10px 16px;border-top:1px solid #eee;margin:0">Licensed in ${unknown.join(', ')}, which ${unknown.length === 1 ? "doesn't" : "don't"} report producer appointments to NIPR, so appointments there won't show here.</div>` : ''}
+</div>`;
+}
+
+document.getElementById('pa-list').addEventListener('click', function(e) {
+const el = e.target.closest('[data-pidx]');
+if (!el) return;
+paSel = this._filtered[parseInt(el.dataset.pidx)];
+renderPAList(); renderPADetail();
+});
+
+document.getElementById('pa-search').addEventListener('input', function() {
+paQ = this.value;
+document.getElementById('pa-clr').style.display = paQ ? 'inline-block' : 'none';
+if (paSel && !paFiltered().includes(paSel)) paSel = null;
+renderPAList(); renderPADetail();
+});
+
+document.getElementById('pa-clr').addEventListener('click', function() {
+document.getElementById('pa-search').value = '';
+paQ = ''; this.style.display = 'none';
+renderPAList(); renderPADetail();
+});
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 document.querySelectorAll('.tab').forEach(t => {
