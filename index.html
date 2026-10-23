@@ -890,7 +890,7 @@ const filterNote = rows.length !== all.length
 ? `<div class="lob-note" style="padding:8px 16px;margin:0;border-bottom:1px solid #eee">Showing ${rows.length} of ${all.length} matching &ldquo;${escH(paQ.trim())}&rdquo;</div>` : '';
 const table = rows.length ? `<table class="state-table">
 <tr><th>State</th><th>Carrier</th><th>Lines of Authority</th></tr>
-${rows.map(a => `<tr><td style="font-weight:600;color:#1f3864">${a.state}</td><td>${escH(a.carrier)}</td><td>${[...a.lobs].sort().map(l => {
+${rows.map(a => `<tr><td style="font-weight:600;color:#1f3864">${a.state}</td><td>${escH(a.carrier)}</td><td>${(a.lobs.size === 1 && a.lobs.has('Not Specified')) ? `<span class="lob-badge lob-none" style="margin:0">${lobIcon('none')}LOB not reported by NIPR for this state</span>` : [...a.lobs].sort().map(l => {
 const c = lobClass(l);
 return `<span class="lob-badge lob-${c}" style="margin:0 4px 4px 0">${lobIcon(c)}${escH(l)}</span>`;
 }).join('')}</td></tr>`).join('')}
