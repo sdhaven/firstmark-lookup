@@ -835,6 +835,12 @@ Object.values(PROD_APPTS).forEach(list =>
 list.sort((a, b) => a.state.localeCompare(b.state) || a.carrier.localeCompare(b.carrier)));
 }
 
+// Is the search text a two-letter state code (e.g. "CO", "WA")?
+function paIsStateQ(q) {
+const Q = (q || '').trim().toUpperCase();
+return /^[A-Z]{2}$/.test(Q) && (APPT_STATES.has(Q) || NON_APPOINTING_STATES.has(Q));
+}
+
 // Does an appointment row match the search text (carrier or state)?
 function paRowMatches(a, q) {
 if (!q) return true;
@@ -849,6 +855,9 @@ return a.state.toUpperCase() === Q || carrierMatches(a.carrier, Q) ||
 function paFiltered() {
 const q = paQ.trim();
 if (!q) return PRODS;
+// A state code finds producers with an appointment in that state -- not
+// names that happen to contain those letters.
+if (paIsStateQ(q)) return PRODS.filter(p => (PROD_APPTS[p.npn] || []).some(a => paRowMatches(a, q)));
 const ql = q.toLowerCase();
 return PRODS.filter(p =>
 p.name.toLowerCase().includes(ql) || p.legal_name.toLowerCase().includes(ql) ||
@@ -859,6 +868,7 @@ p.npn.includes(q) ||
 // True when the search text names the producer, so we show all their rows.
 function paNameHit(p, q) {
 const ql = q.trim().toLowerCase();
+if (ql && paIsStateQ(q)) return false;
 return !ql || p.name.toLowerCase().includes(ql) || p.legal_name.toLowerCase().includes(ql) || p.npn.includes(q.trim());
 }
 
