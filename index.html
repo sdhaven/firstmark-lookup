@@ -188,8 +188,8 @@ Refresh
 <div class="tabs">
 <div class="tab active" data-tab="appointments">FirstMark Appointments</div>
 <div class="tab" data-tab="prodappts">Individual Producer Appointments</div>
-<div class="tab" data-tab="producers">Licensed Producers</div>
-<div class="tab" data-tab="statelookup">State ↔ Producer</div>
+<div class="tab" data-tab="producers">Licenses by Producer</div>
+<div class="tab" data-tab="statelookup">Licenses by State</div>
 <div class="tab" data-tab="expired">Expired &amp; Expiring</div>
 </div>
 
@@ -247,10 +247,6 @@ Refresh
 
 <!-- TAB 3: STATE <-> PRODUCER LOOKUP -->
 <div id="tab-statelookup" class="page">
-<div class="search-wrap" style="gap:0;padding:0;background:#f7f7f5;border-bottom:1px solid #e4e4e0;">
-<button class="sl-mode-btn active" id="sl-btn-state" data-mode="state" style="flex:1;padding:12px 20px;font-size:13px;font-weight:600;border:none;cursor:pointer;border-bottom:3px solid #2e5f9e;background:#fff;color:#1f3864;">&#127758; State → Producers</button>
-<button class="sl-mode-btn" id="sl-btn-prod" data-mode="prod" style="flex:1;padding:12px 20px;font-size:13px;font-weight:600;border:none;cursor:pointer;border-bottom:3px solid transparent;background:#f7f7f5;color:#888;">&#128100; Producer → States</button>
-</div>
 <div class="appt-layout" style="grid-template-columns:160px 1fr;">
 <div class="panel">
 <div class="ph"><span class="plabel" id="sl-left-label">States</span><span class="pct" id="sl-left-ct"></span></div>
@@ -1194,7 +1190,7 @@ ${p.all_loas.length ? `<div class="section-head">Lines of Authority</div>
 // ════════════════════════════════════════════════════════════
 // STATE <-> PRODUCER LOOKUP
 // ════════════════════════════════════════════════════════════
-let slMode = 'state'; // 'state' or 'prod'
+let slMode = 'state'; // always 'state' -- the Producer → States view was removed (duplicate of Licenses by Producer)
 let slSel = null;
 let slQ = '';
 
