@@ -79,6 +79,15 @@ header h1 { font-size: 17px; font-weight: 600; }
 .state-warn { color: #b07a00; font-size: 11px; margin-left: 4px; }
 .state-item.active .state-warn { color: #ffd66b; }
 .panel-note { margin: 8px 10px 0; padding: 8px 10px; background: #fdf8ec; border: 1px solid #f0e2bd; border-radius: 6px; font-size: 11.5px; color: #6b5310; line-height: 1.45; }
+.pa-states { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 16px; border-bottom: 1px solid #eee; }
+.pa-st { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 5px 10px; border: 1px solid #d6dbe4; border-radius: 16px; background: #fff; color: #1f3864; cursor: pointer; font-family: inherit; }
+.pa-st:hover { background: #f1f5fb; }
+.pa-st.active { background: #1f3864; border-color: #1f3864; color: #fff; }
+.pa-st .state-warn { margin-left: 0; }
+.pa-st.active .state-warn { color: #ffd66b; }
+.pa-st-n { font-size: 10px; font-weight: 600; background: #eef1f6; color: #667; padding: 1px 6px; border-radius: 10px; }
+.pa-st.active .pa-st-n { background: rgba(255,255,255,.2); color: rgba(255,255,255,.85); }
+.pa-st-all { color: #555; }
 .page { display: none; }
 .page.active { display: block; }
 
@@ -311,6 +320,9 @@ let APPT = {}, PRODS = [], LICENSES = {}, EXPIRED = [];
 // producer's own appointments grouped by NPN (built after producers load).
 let APPT_ROWS_ALL = [], PROD_APPTS = {}, PROD_APPTS_HAS_NPN = false;
 let paSel = null, paQ = '';
+// Which state's appointments are shown for the selected producer:
+// null = none picked yet, 'ALL' = every state, or a state code.
+let paStateSel = null;
 // States that report ANY appointment to NIPR (any status). Some states don't
 // report appointments at all, so a 0 there means "unknown", not "none".
 let APPT_STATES = new Set();
@@ -437,7 +449,7 @@ document.getElementById('last-updated').textContent =
 
 selState = null; selCarrier = null; carrierQ = '';
 selProd = null; prodQ = '';
-paSel = null; paQ = '';
+paSel = null; paQ = ''; paStateSel = null;
 document.getElementById('pa-search').value = '';
 document.getElementById('pa-clr').style.display = 'none';
 document.getElementById('car-filter').value = '';
@@ -925,14 +937,29 @@ const box = html => `<div class="empty" style="padding:40px 16px;background:#fff
 if (!PROD_APPTS_HAS_NPN) { wrap.innerHTML = box('Individual producer appointments will show here after the next daily data refresh.'); return; }
 if (!paSel) { wrap.innerHTML = box('Select a producer'); return; }
 const all = PROD_APPTS[paSel.npn] || [];
-const rows = paNameHit(paSel, paQ) ? all : all.filter(a => paRowMatches(a, paQ.trim()));
+const matched = paNameHit(paSel, paQ) ? all : all.filter(a => paRowMatches(a, paQ.trim()));
+// With appointments in more than one state, show state buttons first and
+// only the picked state's rows (or all of them via "All states").
+const matchedStates = [...new Set(matched.map(a => a.state))].sort();
+const usePicker = matchedStates.length > 1;
+if (usePicker && paStateSel && paStateSel !== 'ALL' && !matchedStates.includes(paStateSel)) paStateSel = null;
+const rows = !usePicker || paStateSel === 'ALL' ? matched
+: paStateSel ? matched.filter(a => a.state === paStateSel) : [];
+const picker = usePicker ? `<div class="pa-states">
+${matchedStates.map(st => {
+const n = matched.filter(a => a.state === st).length;
+return `<button class="pa-st${paStateSel === st ? ' active' : ''}" data-pastate="${st}">${st}${NON_APPOINTING_STATES.has(st) ? ' <span class="state-warn">&#9888;</span>' : ''}<span class="pa-st-n">${n}</span></button>`;
+}).join('')}
+<button class="pa-st pa-st-all${paStateSel === 'ALL' ? ' active' : ''}" data-pastate="ALL">All states<span class="pa-st-n">${matched.length}</span></button>
+</div>` : '';
 const states = new Set(all.map(a => a.state));
 const carriers = new Set(all.map(a => a.carrier));
 // Licensed states where a 0 may just mean the state doesn't report appointments.
 const unknown = paSel.licensed_states.filter(s => !states.has(s) && (NON_APPOINTING_STATES.has(s) || !APPT_STATES.has(s))).sort();
-const filterNote = rows.length !== all.length
-? `<div class="lob-note" style="padding:8px 16px;margin:0;border-bottom:1px solid #eee">Showing ${rows.length} of ${all.length} matching &ldquo;${escH(paQ.trim())}&rdquo;</div>` : '';
-const table = rows.length ? `<table class="state-table">
+const filterNote = matched.length !== all.length
+? `<div class="lob-note" style="padding:8px 16px;margin:0;border-bottom:1px solid #eee">Showing ${matched.length} of ${all.length} matching &ldquo;${escH(paQ.trim())}&rdquo;</div>` : '';
+const table = (usePicker && !paStateSel) ? `<div class="empty">Select a state above to see its appointments</div>`
+: rows.length ? `<table class="state-table">
 <tr><th>State</th><th>Carrier</th><th>Lines of Authority</th></tr>
 ${rows.map(a => `<tr><td style="font-weight:600;color:#1f3864">${a.state}</td><td>${escH(a.carrier)}</td><td>${(a.lobs.size === 1 && a.lobs.has('Not Specified')) ? `<span class="lob-badge lob-none" style="margin:0">${lobIcon('none')}LOB not reported by NIPR for this state</span>` : [...a.lobs].sort().map(l => {
 const c = lobClass(l);
@@ -946,20 +973,29 @@ wrap.innerHTML = `<div class="prod-detail">
 <div class="stat-cell"><div class="stat-num">${carriers.size}</div><div class="stat-lbl">Carriers</div></div>
 <div class="stat-cell"><div class="stat-num">${states.size}</div><div class="stat-lbl">States</div></div>
 </div>
-${filterNote}${table}
+${filterNote}${picker}${table}
 ${unknown.length ? `<div class="lob-note" style="padding:10px 16px;border-top:1px solid #eee;margin:0">Licensed in ${unknown.join(', ')}, which ${unknown.length === 1 ? "doesn't" : "don't"} report producer appointments to NIPR, so appointments there won't show here.</div>` : ''}
 </div>`;
 }
+
+document.getElementById('pa-detail-wrap').addEventListener('click', function(e) {
+const el = e.target.closest('[data-pastate]');
+if (!el) return;
+paStateSel = el.dataset.pastate;
+renderPADetail();
+});
 
 document.getElementById('pa-list').addEventListener('click', function(e) {
 const el = e.target.closest('[data-pidx]');
 if (!el) return;
 paSel = this._filtered[parseInt(el.dataset.pidx)];
+paStateSel = null;
 renderPAList(); renderPADetail();
 });
 
 document.getElementById('pa-search').addEventListener('input', function() {
 paQ = this.value;
+paStateSel = null;
 document.getElementById('pa-clr').style.display = paQ ? 'inline-block' : 'none';
 if (paSel && !paFiltered().includes(paSel)) paSel = null;
 renderPAList(); renderPADetail();
