@@ -1022,7 +1022,7 @@ const filtered = q ? all.filter(c => carrierMatches(c, q)) : all;
 document.getElementById('car-head').textContent = 'Carriers — ' + selState;
 cc.textContent = filtered.length < all.length ? filtered.length+' / '+all.length : all.length;
 const warn = NON_APPOINTING_STATES.has(selState)
-? `<div class="panel-note"><strong>Incomplete:</strong> ${selState} does not report appointments to the dataset this webpage uses, so the carriers below (some entered by hand from FirstMark's records) may not be the complete picture.</div>` : '';
+? `<div class="panel-note">${selState} does not report appointments to the dataset this webpage uses, so there may be missing appointments.</div>` : '';
 cl.innerHTML = warn + (filtered.map((c,i) =>
 `<div class="item${c===selCarrier?' active':''}" data-cidx="${i}">
 <span style="flex:1;min-width:0">${c}</span><span class="arr">›</span>
