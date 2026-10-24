@@ -19,10 +19,19 @@ header h1 { font-size: 17px; font-weight: 600; }
 .spinning { animation: spin .7s linear infinite; }
 .last-updated { font-size: 11px; color: rgba(255,255,255,.45); margin-top: 3px; }
 
-.tabs { background: #17305a; display: flex; gap: 2px; padding: 0 28px; }
+.tabs { background: #17305a; display: flex; gap: 2px; padding: 0 28px; overflow-x: auto; scrollbar-width: none; }
 .tab { padding: 11px 20px; font-size: 13px; font-weight: 500; color: rgba(255,255,255,.6); cursor: pointer; border-bottom: 3px solid transparent; transition: all .15s; white-space: nowrap; }
 .tab:hover { color: rgba(255,255,255,.85); }
 .tab.active { color: #fff; border-bottom-color: #6ea8d8; }
+/* Tab groups: appointments in FirstMark gold, licenses in blue. */
+.tab::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 7px; vertical-align: 1px; background: #6ea8d8; opacity: .7; }
+.tab.grp-appt::before { background: #d9b45a; }
+.tab.grp-appt { color: rgba(240,214,150,.7); }
+.tab.grp-appt:hover { color: rgba(240,214,150,.95); }
+.tab.grp-appt.active { color: #f3d98f; border-bottom-color: #d9b45a; background: rgba(217,180,90,.08); }
+.tab.grp-lic.active { background: rgba(110,168,216,.08); }
+.tab.active::before { opacity: 1; }
+.tab-sep { width: 1px; background: rgba(255,255,255,.18); margin: 9px 10px; }
 
 #loading { position: fixed; inset: 0; background: rgba(20,40,80,.93); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 999; color: #fff; gap: 16px; }
 #loading svg { animation: spin .8s linear infinite; }
@@ -186,11 +195,12 @@ Refresh
 </header>
 
 <div class="tabs">
-<div class="tab active" data-tab="appointments">FirstMark Appointments</div>
-<div class="tab" data-tab="prodappts">Individual Producer Appointments</div>
-<div class="tab" data-tab="producers">Licenses by Producer</div>
-<div class="tab" data-tab="statelookup">Licenses by State</div>
-<div class="tab" data-tab="expired">Expired &amp; Expiring</div>
+<div class="tab grp-appt active" data-tab="appointments">FirstMark Appointments</div>
+<div class="tab grp-appt" data-tab="prodappts">Individual Producer Appointments</div>
+<div class="tab-sep"></div>
+<div class="tab grp-lic" data-tab="producers">Licenses by Producer</div>
+<div class="tab grp-lic" data-tab="statelookup">Licenses by State</div>
+<div class="tab grp-lic" data-tab="expired">Expired &amp; Expiring</div>
 </div>
 
 <!-- TAB 1: APPOINTMENTS -->
