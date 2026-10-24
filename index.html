@@ -70,6 +70,9 @@ header h1 { font-size: 17px; font-weight: 600; }
 @media (max-width: 700px) { .exp-wrap { padding: 12px 14px 24px; } .exp-hide-sm { display: none; } }
 .appt-note { margin: 14px 28px 0; padding: 9px 14px; background: #fdf8ec; border: 1px solid #f0e2bd; border-radius: 8px; font-size: 12px; color: #6b5310; line-height: 1.5; }
 @media (max-width: 700px) { .appt-note { margin: 12px 14px 0; } }
+.state-warn { color: #b07a00; font-size: 11px; margin-left: 4px; }
+.state-item.active .state-warn { color: #ffd66b; }
+.panel-note { margin: 8px 10px 0; padding: 8px 10px; background: #fdf8ec; border: 1px solid #f0e2bd; border-radius: 6px; font-size: 11.5px; color: #6b5310; line-height: 1.45; }
 .page { display: none; }
 .page.active { display: block; }
 
@@ -686,8 +689,18 @@ function carrierMatches(name, q) {
   return name.toUpperCase().includes(q) || [...(APPT_RAW[name] || [])].some(r => r.includes(q));
 }
 
+// Exact display names for short carrier names entered by hand (manually
+// verified appointments), which title-casing would otherwise mangle.
+const EXACT_CARRIER_NAMES = {
+  "PURE": "PURE",
+  "MOE": "MOE",
+  "METLIFE": "MetLife",
+  "GEOVERA": "GeoVera",
+  "PERSONAL UMB.COM": "PersonalUmbrella.com",
+};
 function dispName(raw) {
   const upper = (raw || '').trim().toUpperCase();
+  if (EXACT_CARRIER_NAMES[upper]) return EXACT_CARRIER_NAMES[upper];
   for (const [pat, disp] of CARRIER_RULES) {
     if (upper.includes(pat)) return disp;
   }
@@ -979,7 +992,7 @@ setNonApptNote('appt-note', selState);
 document.getElementById('st-ct').textContent = states.length;
 document.getElementById('st-list').innerHTML = states.map(s =>
 `<div class="item state-item${s===selState?' active':''}" data-state="${s}">
-<span>${s}</span><span class="sct">${APPT[s] ? Object.keys(APPT[s]).length : '—'}</span>
+<span>${s}${NON_APPOINTING_STATES.has(s) ? '<span class="state-warn" title="Incomplete: this state does not report appointments to the dataset this webpage uses">&#9888;</span>' : ''}</span><span class="sct">${APPT[s] ? Object.keys(APPT[s]).length : '—'}</span>
 </div>`
 ).join('') || '<div class="empty">No appointment data loaded</div>';
 }
@@ -1008,11 +1021,13 @@ const q = carrierQ.toUpperCase();
 const filtered = q ? all.filter(c => carrierMatches(c, q)) : all;
 document.getElementById('car-head').textContent = 'Carriers — ' + selState;
 cc.textContent = filtered.length < all.length ? filtered.length+' / '+all.length : all.length;
-cl.innerHTML = filtered.map((c,i) =>
+const warn = NON_APPOINTING_STATES.has(selState)
+? `<div class="panel-note"><strong>Incomplete:</strong> ${selState} does not report appointments to the dataset this webpage uses, so the carriers below (some entered by hand from FirstMark's records) may not be the complete picture.</div>` : '';
+cl.innerHTML = warn + (filtered.map((c,i) =>
 `<div class="item${c===selCarrier?' active':''}" data-cidx="${i}">
 <span style="flex:1;min-width:0">${c}</span><span class="arr">›</span>
 </div>`
-).join('') || '<div class="empty">No matches</div>';
+).join('') || '<div class="empty">No matches</div>');
 cl._filtered = filtered;
 }
 
