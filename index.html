@@ -336,8 +336,9 @@ let APPT_STATES = new Set();
 // A 0 in these states means "unknown", even if some carriers report there.
 // CO and MD require appointments only for narrow cases (bail bonds, motor club).
 const NON_APPOINTING_STATES = new Set(['AK','AZ','CO','IL','IN','MD','MO','OR','RI']);
-// States that DO require appointments but only appoint individual producers,
-// never the agency itself (FirstMark-licensed states only; per AgentSync's
+// States that require producer appointments but don't require the agency to
+// be appointed (carriers may still file agency appointments voluntarily, e.g.
+// ASI/Progressive in GA, SC, TN, VT) (FirstMark-licensed states only; per AgentSync's
 // state-by-state appointment guide and NAIC state licensing pages, Oct 2026).
 // FirstMark will never show agency appointments here, so the FirstMark tab
 // lists them anyway and points people to Individual Producer Appointments.
@@ -1043,7 +1044,7 @@ setNonApptNote('appt-note', selState);
 document.getElementById('st-ct').textContent = states.length;
 document.getElementById('st-list').innerHTML = states.map(s =>
 `<div class="item state-item${s===selState?' active':''}" data-state="${s}">
-<span>${s}${NON_APPOINTING_STATES.has(s) ? '<span class="state-warn" title="Incomplete: this state does not report appointments to the dataset this webpage uses">&#9888;</span>' : ''}${NO_AGENCY_APPT_STATES.has(s) ? '<span class="state-info" title="This state doesn\'t appoint agencies. Check each producer\'s own appointments.">&#9432;</span>' : ''}</span><span class="sct">${APPT[s] ? Object.keys(APPT[s]).length : '—'}</span>
+<span>${s}${NON_APPOINTING_STATES.has(s) ? '<span class="state-warn" title="Incomplete: this state does not report appointments to the dataset this webpage uses">&#9888;</span>' : ''}${NO_AGENCY_APPT_STATES.has(s) ? '<span class="state-info" title="This state doesn\'t require agency appointments. Check each producer\'s own appointments.">&#9432;</span>' : ''}</span><span class="sct">${APPT[s] ? Object.keys(APPT[s]).length : '—'}</span>
 </div>`
 ).join('') || '<div class="empty">No appointment data loaded</div>';
 }
@@ -1061,7 +1062,7 @@ const cl = document.getElementById('car-list');
 const cc = document.getElementById('car-ct');
 if (!selState) { cl.innerHTML = '<div class="empty">Select a state</div>'; cc.textContent=''; return; }
 const noAgency = NO_AGENCY_APPT_STATES.has(selState)
-? `<div class="panel-note agency-note"><strong>${selState} doesn't appoint agencies.</strong> Carriers appoint each producer individually here, so FirstMark itself will never show appointments in ${selState}. To see who can write with a carrier in ${selState}, check each producer's own appointments.
+? `<div class="panel-note agency-note"><strong>${selState} doesn't require agency appointments.</strong> Most carriers appoint each producer individually here, so the FirstMark list for ${selState} is likely incomplete. To see who can write with a carrier in ${selState}, check each producer's own appointments.
 <button class="note-jump" data-jumpstate="${selState}">See ${selState} producer appointments &rsaquo;</button></div>` : '';
 if (!APPT[selState]) {
 document.getElementById('car-head').textContent = 'Carriers — ' + selState;
