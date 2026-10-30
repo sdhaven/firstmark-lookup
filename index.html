@@ -17,6 +17,7 @@ header h1 { font-size: 17px; font-weight: 600; }
 .refresh-btn:hover { background: rgba(255,255,255,.25); }
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinning { animation: spin .7s linear infinite; }
+.data-src { font-size: 12px; color: rgba(255,255,255,.75); margin-top: 4px; }
 .last-updated { font-size: 11px; color: rgba(255,255,255,.45); margin-top: 3px; }
 
 .tabs { background: #17305a; display: flex; gap: 2px; padding: 0 28px; overflow-x: auto; scrollbar-width: none; }
@@ -80,6 +81,7 @@ header h1 { font-size: 17px; font-weight: 600; }
 .state-item.active .state-warn { color: #ffd66b; }
 .state-info { color: #2f6aa8; font-size: 11px; margin-left: 4px; }
 .state-item.active .state-info { color: #bcd9f5; }
+.pa-cover-note { margin: 10px 16px; }
 .panel-note.agency-note { background: #eef4fb; border-color: #c9dcf0; color: #1f3f63; }
 .note-jump { display: block; margin-top: 8px; padding: 5px 10px; font-size: 11.5px; font-weight: 600; color: #fff; background: #2f6aa8; border: none; border-radius: 5px; cursor: pointer; }
 .note-jump:hover { background: #24578d; }
@@ -190,6 +192,7 @@ header, .search-wrap, .appt-layout, .prod-layout, #appt-sr { padding-left: 14px;
 <div>
 <div class="sub">FirstMark Insurance Group &nbsp;&middot;&nbsp; NPN 17105329</div>
 <h1>Producer &amp; Appointment Lookup</h1>
+<div class="data-src">Data is pulled from NIPR automatically every morning at 7 AM Pacific.</div>
 <div class="last-updated" id="last-updated"></div>
 </div>
 <div class="hright">
@@ -343,6 +346,22 @@ const NON_APPOINTING_STATES = new Set(['AK','AZ','CO','IL','IN','MD','MO','OR','
 // FirstMark will never show agency appointments here, so the FirstMark tab
 // lists them anyway and points people to Individual Producer Appointments.
 // KS appoints agencies only for niche lines (rental car, credit, etc.), not P&C.
+// States where a producer affiliated with an appointed agency can write
+// under the agency's appointment without their own (verified Oct 2026 against
+// state sources: MT Code 33-17-238 (2017 HB 138), Utah Admin. Code
+// R590-244-11(1)(c), and WA OIC licensing rules via NAIC: individual
+// appointment only when directly representing the insurer, otherwise affiliation).
+// AgentSync also lists CA, ID, KY, MA, NJ, WY, but those weren't confirmed
+// (Idaho's DOI says the opposite), so they're deliberately left out.
+const AGENCY_COVERS_STATES = new Set(['MT','UT','WA']);
+const AGENCY_COVERS_NOTES = {
+MT: "<strong>MT lets producers use the agency's appointment.</strong> A producer affiliated with FirstMark can write with any carrier that has appointed FirstMark, without needing their own appointment, unless that carrier's contract says otherwise. A producer with no individual appointments in MT may still be fine.",
+UT: "<strong>UT lets producers use the agency's appointment.</strong> Carriers don't have to appoint a producer who is designated under FirstMark's appointment, so a producer with no individual appointments in UT may still be fine to write with FirstMark's carriers.",
+WA: "<strong>In WA, producers work under FirstMark's appointment through an affiliation.</strong> A producer only needs their own appointment if they represent a carrier directly. To write through FirstMark, they need to be <em>affiliated</em> with FirstMark in WA instead, so a producer with no individual appointments here may still be fine."
+};
+function agencyCoversNote(st) {
+return AGENCY_COVERS_STATES.has(st) ? `<div class="panel-note agency-note">${AGENCY_COVERS_NOTES[st]}</div>` : '';
+}
 const NO_AGENCY_APPT_STATES = new Set(['DE','FL','GA','KS','MN','NC','NE','NM','SC','TN','VT','WI']);
 // The "Please Note" banner shows only when a non-reporting state is
 // selected (FirstMark tab) or searched (producer tab).
@@ -986,7 +1005,7 @@ wrap.innerHTML = `<div class="prod-detail">
 <div class="stat-cell"><div class="stat-num">${carriers.size}</div><div class="stat-lbl">Carriers</div></div>
 <div class="stat-cell"><div class="stat-num">${states.size}</div><div class="stat-lbl">States</div></div>
 </div>
-${filterNote}${picker}${table}
+${filterNote}${picker}${(() => { const s = paIsStateQ(paQ) ? paQ.trim().toUpperCase() : (paStateSel && paStateSel !== 'ALL' ? paStateSel : (!usePicker && rows.length ? rows[0].state : null)); return s ? agencyCoversNote(s).replace('panel-note', 'panel-note pa-cover-note') : ''; })()}${table}
 ${unknown.length ? `<div class="lob-note" style="padding:10px 16px;border-top:1px solid #eee;margin:0">Licensed in ${unknown.join(', ')}, which ${unknown.length === 1 ? "doesn't" : "don't"} report producer appointments to NIPR, so appointments there won't show here.</div>` : ''}
 </div>`;
 }
@@ -1044,7 +1063,7 @@ setNonApptNote('appt-note', selState);
 document.getElementById('st-ct').textContent = states.length;
 document.getElementById('st-list').innerHTML = states.map(s =>
 `<div class="item state-item${s===selState?' active':''}" data-state="${s}">
-<span>${s}${NON_APPOINTING_STATES.has(s) ? '<span class="state-warn" title="Incomplete: this state does not report appointments to the dataset this webpage uses">&#9888;</span>' : ''}${NO_AGENCY_APPT_STATES.has(s) ? '<span class="state-info" title="This state doesn\'t require agency appointments. Check each producer\'s own appointments.">&#9432;</span>' : ''}</span><span class="sct">${APPT[s] ? Object.keys(APPT[s]).length : '—'}</span>
+<span>${s}${NON_APPOINTING_STATES.has(s) ? '<span class="state-warn" title="Incomplete: this state does not report appointments to the dataset this webpage uses">&#9888;</span>' : ''}${NO_AGENCY_APPT_STATES.has(s) ? '<span class="state-info" title="This state doesn\'t require agency appointments. Check each producer\'s own appointments.">&#9432;</span>' : ''}${AGENCY_COVERS_STATES.has(s) ? '<span class="state-info" title="Producers affiliated with FirstMark can write under FirstMark\'s appointment here.">&#9432;</span>' : ''}</span><span class="sct">${APPT[s] ? Object.keys(APPT[s]).length : '—'}</span>
 </div>`
 ).join('') || '<div class="empty">No appointment data loaded</div>';
 }
@@ -1078,7 +1097,7 @@ document.getElementById('car-head').textContent = 'Carriers — ' + selState;
 cc.textContent = filtered.length < all.length ? filtered.length+' / '+all.length : all.length;
 const warn = NON_APPOINTING_STATES.has(selState)
 ? `<div class="panel-note">${selState} does not report appointments to the dataset this webpage uses, so there may be missing appointments.</div>` : '';
-cl.innerHTML = noAgency + warn + (filtered.map((c,i) =>
+cl.innerHTML = noAgency + agencyCoversNote(selState) + warn + (filtered.map((c,i) =>
 `<div class="item${c===selCarrier?' active':''}" data-cidx="${i}">
 <span style="flex:1;min-width:0">${c}</span><span class="arr">›</span>
 </div>`
