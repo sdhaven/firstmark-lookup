@@ -78,6 +78,11 @@ header h1 { font-size: 17px; font-weight: 600; }
 @media (max-width: 700px) { .appt-note { margin: 12px 14px 0; } }
 .state-warn { color: #b07a00; font-size: 11px; margin-left: 4px; }
 .state-item.active .state-warn { color: #ffd66b; }
+.state-info { color: #2f6aa8; font-size: 11px; margin-left: 4px; }
+.state-item.active .state-info { color: #bcd9f5; }
+.panel-note.agency-note { background: #eef4fb; border-color: #c9dcf0; color: #1f3f63; }
+.note-jump { display: block; margin-top: 8px; padding: 5px 10px; font-size: 11.5px; font-weight: 600; color: #fff; background: #2f6aa8; border: none; border-radius: 5px; cursor: pointer; }
+.note-jump:hover { background: #24578d; }
 .panel-note { margin: 8px 10px 0; padding: 8px 10px; background: #fdf8ec; border: 1px solid #f0e2bd; border-radius: 6px; font-size: 11.5px; color: #6b5310; line-height: 1.45; }
 .pa-states { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 16px; border-bottom: 1px solid #eee; }
 .pa-st { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 5px 10px; border: 1px solid #d6dbe4; border-radius: 16px; background: #fff; color: #1f3864; cursor: pointer; font-family: inherit; }
@@ -331,6 +336,13 @@ let APPT_STATES = new Set();
 // A 0 in these states means "unknown", even if some carriers report there.
 // CO and MD require appointments only for narrow cases (bail bonds, motor club).
 const NON_APPOINTING_STATES = new Set(['AK','AZ','CO','IL','IN','MD','MO','OR','RI']);
+// States that DO require appointments but only appoint individual producers,
+// never the agency itself (FirstMark-licensed states only; per AgentSync's
+// state-by-state appointment guide and NAIC state licensing pages, Oct 2026).
+// FirstMark will never show agency appointments here, so the FirstMark tab
+// lists them anyway and points people to Individual Producer Appointments.
+// KS appoints agencies only for niche lines (rental car, credit, etc.), not P&C.
+const NO_AGENCY_APPT_STATES = new Set(['DE','FL','GA','KS','MN','NC','NE','NM','SC','TN','VT','WI']);
 // The "Please Note" banner shows only when a non-reporting state is
 // selected (FirstMark tab) or searched (producer tab).
 function setNonApptNote(id, state) {
@@ -880,7 +892,7 @@ list.sort((a, b) => a.state.localeCompare(b.state) || a.carrier.localeCompare(b.
 // Is the search text a two-letter state code (e.g. "CO", "WA")?
 function paIsStateQ(q) {
 const Q = (q || '').trim().toUpperCase();
-return /^[A-Z]{2}$/.test(Q) && (APPT_STATES.has(Q) || NON_APPOINTING_STATES.has(Q));
+return /^[A-Z]{2}$/.test(Q) && (APPT_STATES.has(Q) || NON_APPOINTING_STATES.has(Q) || NO_AGENCY_APPT_STATES.has(Q));
 }
 
 // Does an appointment row match the search text (carrier or state)?
@@ -889,7 +901,7 @@ if (!q) return true;
 const Q = q.toUpperCase();
 // A two-letter state code (e.g. "CO", "WA") searches by state only --
 // otherwise "CO" would also match every carrier with "COMPANY" in its name.
-if (/^[A-Z]{2}$/.test(Q) && (APPT_STATES.has(Q) || NON_APPOINTING_STATES.has(Q))) return a.state === Q;
+if (/^[A-Z]{2}$/.test(Q) && (APPT_STATES.has(Q) || NON_APPOINTING_STATES.has(Q) || NO_AGENCY_APPT_STATES.has(Q))) return a.state === Q;
 return a.state.toUpperCase() === Q || carrierMatches(a.carrier, Q) ||
 [...a.raw].some(r => r.includes(Q));
 }
@@ -1025,13 +1037,13 @@ function renderStates() {
 // licensed there), even with no agency appointments, so people looking for
 // e.g. CO find it and see why it's empty.
 const licensedAnywhere = new Set(PRODS.flatMap(p => p.licensed_states));
-const extra = [...NON_APPOINTING_STATES].filter(st => !APPT[st] && licensedAnywhere.has(st));
-const states = [...Object.keys(APPT), ...extra].sort();
+const extra = [...NON_APPOINTING_STATES, ...NO_AGENCY_APPT_STATES].filter(st => !APPT[st] && licensedAnywhere.has(st));
+const states = [...new Set([...Object.keys(APPT), ...extra])].sort();
 setNonApptNote('appt-note', selState);
 document.getElementById('st-ct').textContent = states.length;
 document.getElementById('st-list').innerHTML = states.map(s =>
 `<div class="item state-item${s===selState?' active':''}" data-state="${s}">
-<span>${s}${NON_APPOINTING_STATES.has(s) ? '<span class="state-warn" title="Incomplete: this state does not report appointments to the dataset this webpage uses">&#9888;</span>' : ''}</span><span class="sct">${APPT[s] ? Object.keys(APPT[s]).length : '—'}</span>
+<span>${s}${NON_APPOINTING_STATES.has(s) ? '<span class="state-warn" title="Incomplete: this state does not report appointments to the dataset this webpage uses">&#9888;</span>' : ''}${NO_AGENCY_APPT_STATES.has(s) ? '<span class="state-info" title="This state doesn\'t appoint agencies. Check each producer\'s own appointments.">&#9432;</span>' : ''}</span><span class="sct">${APPT[s] ? Object.keys(APPT[s]).length : '—'}</span>
 </div>`
 ).join('') || '<div class="empty">No appointment data loaded</div>';
 }
@@ -1048,10 +1060,13 @@ function renderCarriers() {
 const cl = document.getElementById('car-list');
 const cc = document.getElementById('car-ct');
 if (!selState) { cl.innerHTML = '<div class="empty">Select a state</div>'; cc.textContent=''; return; }
+const noAgency = NO_AGENCY_APPT_STATES.has(selState)
+? `<div class="panel-note agency-note"><strong>${selState} doesn't appoint agencies.</strong> Carriers appoint each producer individually here, so FirstMark itself will never show appointments in ${selState}. To see who can write with a carrier in ${selState}, check each producer's own appointments.
+<button class="note-jump" data-jumpstate="${selState}">See ${selState} producer appointments &rsaquo;</button></div>` : '';
 if (!APPT[selState]) {
 document.getElementById('car-head').textContent = 'Carriers — ' + selState;
 cc.textContent = '0';
-cl.innerHTML = `<div class="empty">${selState} does not report appointments to the dataset this webpage uses, so no FirstMark appointments are listed here.</div>`;
+cl.innerHTML = noAgency || `<div class="empty">${selState} does not report appointments to the dataset this webpage uses, so no FirstMark appointments are listed here.</div>`;
 cl._filtered = [];
 return;
 }
@@ -1062,7 +1077,7 @@ document.getElementById('car-head').textContent = 'Carriers — ' + selState;
 cc.textContent = filtered.length < all.length ? filtered.length+' / '+all.length : all.length;
 const warn = NON_APPOINTING_STATES.has(selState)
 ? `<div class="panel-note">${selState} does not report appointments to the dataset this webpage uses, so there may be missing appointments.</div>` : '';
-cl.innerHTML = warn + (filtered.map((c,i) =>
+cl.innerHTML = noAgency + warn + (filtered.map((c,i) =>
 `<div class="item${c===selCarrier?' active':''}" data-cidx="${i}">
 <span style="flex:1;min-width:0">${c}</span><span class="arr">›</span>
 </div>`
@@ -1071,6 +1086,16 @@ cl._filtered = filtered;
 }
 
 document.getElementById('car-list').addEventListener('click', function(e) {
+// "See XX producer appointments" button: switch tabs and search that state.
+const jump = e.target.closest('[data-jumpstate]');
+if (jump) {
+const st = jump.dataset.jumpstate;
+document.querySelector('.tab[data-tab="prodappts"]').click();
+const inp = document.getElementById('pa-search');
+inp.value = st;
+inp.dispatchEvent(new Event('input'));
+return;
+}
 const el = e.target.closest('[data-cidx]');
 if (!el) return;
 selCarrier = this._filtered[parseInt(el.dataset.cidx)];
